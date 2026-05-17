@@ -1,0 +1,36 @@
+export const AFFIRMATIONS = [
+  "Tus pensamientos no te definen, eres mucho más que ellos.",
+  "Respira profundo, este momento también pasará.",
+  "Eres más fuerte de lo que crees, más valiente de lo que pareces.",
+  "Cada día es una nueva oportunidad para crecer.",
+  "Tus emociones son válidas, permítete sentirlas.",
+  "No estás sola, el universo conspira a tu favor.",
+  "La calma comienza en tu interior.",
+  "Eres suficiente, exactamente como eres.",
+  "Hoy elijo la paz sobre la preocupación.",
+  "Tus pensamientos son nubes, tú eres el cielo.",
+  "Confía en el proceso, todo llega en el momento perfecto.",
+  "Eres luz, incluso en los días más oscuros.",
+  "Mereces amor, paz y tranquilidad.",
+  "Cada pequeño paso cuenta, estás avanzando.",
+  "Tu mente es un jardín, cultiva pensamientos bonitos.",
+  "Eres la persona más fuerte que conozco, mi amor.",
+  "Tus pensamientos son nubes pasajeras, tú eres el cielo infinito.",
+  "Cada día a tu lado es un regalo que atesoro.",
+  "Eres suficiente, exactamente como eres. Te amo.",
+  "Este momento difícil también pasará, y estaré aquí contigo.",
+  "Tu sonrisa ilumina hasta mis días más oscuros.",
+  "Eres una guerrera, has superado tanto y sigues brillando.",
+  "Confía en ti como yo confío en ti, mi vida.",
+  "Tus emociones son válidas, siéntelas sin juzgarte.",
+  "Siempre estaré aquí para escucharte y apoyarte.",
+  "Eres luz, amor y esperanza. Nunca lo olvides.",
+  "Respira profundo, todo está bien. Estás a salvo.",
+  "Tus pensamientos no te definen, tu corazón sí.",
+  "Gracias por existir, por ser tú, por estar en mi vida.",
+  "Hoy elige la paz, la calma y el amor propio.",
+];
+
+export const getRandomAffirmation = (): string => {
+  return AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
+};
