@@ -11,6 +11,10 @@ import {
 import { Text, Portal, Modal, Surface, Button, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 import { Category, CATEGORIES, CATEGORY_COLORS } from '../database/database';
 
 interface RecordButtonProps {
@@ -22,10 +26,14 @@ export default function RecordButton({ onTranscriptionComplete }: RecordButtonPr
   const [manualText, setManualText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category>('Reflexión');
   const [isRecording, setIsRecording] = useState(false);
+  const [isAvailable, setIsAvailable] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const inputRef = useRef<RNTextInput>(null);
-  const recognitionRef = useRef<any>(null);
+  const textBeforeRecordingRef = useRef('');
+  const finalTranscriptRef = useRef('');
+  const isPressedRef = useRef(false);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -38,6 +46,44 @@ export default function RecordButton({ onTranscriptionComplete }: RecordButtonPr
     return () => pulse.stop();
   }, []);
 
+  useEffect(() => {
+    setIsAvailable(ExpoSpeechRecognitionModule.isRecognitionAvailable());
+    ExpoSpeechRecognitionModule.requestPermissionsAsync().then(({ granted }) => {
+      setHasPermission(granted);
+    });
+  }, []);
+
+  useSpeechRecognitionEvent('result', (event) => {
+    const transcript = event.results[0]?.transcript ?? '';
+    if (!transcript) return;
+    const base = textBeforeRecordingRef.current;
+    if (event.isFinal) {
+      finalTranscriptRef.current = finalTranscriptRef.current
+        ? `${finalTranscriptRef.current} ${transcript}`
+        : transcript;
+      setManualText([base, finalTranscriptRef.current].filter(Boolean).join(' '));
+    } else {
+      setManualText([base, finalTranscriptRef.current, transcript].filter(Boolean).join(' '));
+    }
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    setIsRecording(false);
+    if (event.error === 'aborted') return;
+    const messages: Record<string, string> = {
+      'no-speech': 'No se detectó voz. Intenta hablar más fuerte.',
+      'not-allowed': 'Permiso de micrófono denegado. Habilítalo en Ajustes.',
+      'network': 'Error de red. Verifica tu conexión a internet.',
+      'audio-capture': 'No se pudo acceder al micrófono.',
+    };
+    const msg = messages[event.error] ?? `Error de reconocimiento: ${event.error}`;
+    Alert.alert('Error de voz', msg);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setIsRecording(false);
+  });
+
   const handleMainPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setManualText('');
@@ -46,36 +92,39 @@ export default function RecordButton({ onTranscriptionComplete }: RecordButtonPr
     setTimeout(() => inputRef.current?.focus(), 400);
   };
 
-  // Iniciar reconocimiento de voz con expo-speech-recognition
-  const startRecognition = async () => {
-    try {
-      const SpeechRecognition = require('expo-speech-recognition');
-      
-      setIsRecording(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  const handleRecordPressIn = async () => {
+    isPressedRef.current = true;
 
-      const result = await SpeechRecognition.recognizeAsync({
-        lang: 'es-ES',
-        interimResults: false,
-        continuous: false,
-      });
+    let granted = hasPermission;
+    if (!granted) {
+      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      granted = result.granted;
+      setHasPermission(granted);
+    }
 
-      console.log('🎤 Resultado:', JSON.stringify(result));
+    if (!granted) {
+      isPressedRef.current = false;
+      Alert.alert(
+        'Permiso requerido',
+        'Habilita el micrófono en Ajustes para usar la transcripción por voz.',
+      );
+      return;
+    }
 
-      if (result && result.transcript) {
-        setManualText(prev => {
-          const newText = prev ? prev + ' ' + result.transcript : result.transcript;
-          return newText;
-        });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        Alert.alert('Sin texto', 'No se detectó ninguna voz. Intenta de nuevo.');
-      }
-    } catch (error: any) {
-      console.error('Error reconocimiento:', error.message);
-      Alert.alert('Error', 'No se pudo reconocer el audio. Intenta de nuevo.');
-    } finally {
-      setIsRecording(false);
+    // El usuario soltó el botón mientras esperábamos el permiso: no iniciar.
+    if (!isPressedRef.current) return;
+
+    textBeforeRecordingRef.current = manualText;
+    finalTranscriptRef.current = '';
+    setIsRecording(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    ExpoSpeechRecognitionModule.start({ lang: 'es-ES', interimResults: true, continuous: true });
+  };
+
+  const handleRecordPressOut = () => {
+    isPressedRef.current = false;
+    if (isRecording) {
+      ExpoSpeechRecognitionModule.stop();
     }
   };
 
@@ -92,6 +141,9 @@ export default function RecordButton({ onTranscriptionComplete }: RecordButtonPr
   };
 
   const handleCancel = () => {
+    if (isRecording) {
+      ExpoSpeechRecognitionModule.stop();
+    }
     setShowInputModal(false);
     setManualText('');
     Keyboard.dismiss();
@@ -118,23 +170,29 @@ export default function RecordButton({ onTranscriptionComplete }: RecordButtonPr
               <IconButton icon="close" size={24} iconColor="#9CA3AF" onPress={handleCancel} />
             </View>
 
-            {/* BOTÓN DE GRABAR */}
-            <TouchableOpacity
-              style={[styles.recordButton, isRecording && styles.recordButtonActive]}
-              onPress={startRecognition}
-              disabled={isRecording}
-            >
-              <MaterialCommunityIcons
-                name={isRecording ? 'loading' : 'microphone'}
-                size={30}
-                color={isRecording ? '#FFF' : '#6366F1'}
-              />
-              <Text style={[styles.recordText, isRecording && { color: '#FFF' }]}>
-                {isRecording ? 'Escuchando...' : '🎤 TOCA PARA HABLAR'}
-              </Text>
-            </TouchableOpacity>
+            {isAvailable ? (
+              <TouchableOpacity
+                style={[styles.recordButton, isRecording && styles.recordButtonActive]}
+                onPressIn={handleRecordPressIn}
+                onPressOut={handleRecordPressOut}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name={isRecording ? 'microphone' : 'microphone-outline'}
+                  size={30}
+                  color={isRecording ? '#FFF' : '#6366F1'}
+                />
+                <Text style={[styles.recordText, isRecording && { color: '#FFF' }]}>
+                  {isRecording ? '🔴 Escuchando...' : '🎤 MANTÉN PULSADO PARA HABLAR'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.recordUnavailable}>
+                <MaterialCommunityIcons name="microphone-off" size={24} color="#9CA3AF" />
+                <Text style={styles.recordUnavailableText}>Voz no disponible — escribe tu pensamiento</Text>
+              </View>
+            )}
 
-            {/* Campo de texto */}
             <RNTextInput
               ref={inputRef}
               style={styles.textInput}
@@ -147,7 +205,6 @@ export default function RecordButton({ onTranscriptionComplete }: RecordButtonPr
               textAlignVertical="top"
             />
 
-            {/* Categorías */}
             <Text style={styles.categoryLabel}>¿Cómo te sientes?</Text>
             <View style={styles.categoryGrid}>
               {CATEGORIES.map((cat) => (
@@ -211,6 +268,12 @@ const styles = StyleSheet.create({
   },
   recordButtonActive: { backgroundColor: '#EF4444', borderColor: '#DC2626' },
   recordText: { fontSize: 16, fontWeight: '700', color: '#6366F1' },
+  recordUnavailable: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#F3F4F6', borderRadius: 16, paddingVertical: 14, gap: 8,
+    borderWidth: 1.5, borderColor: '#E5E7EB', marginBottom: 12,
+  },
+  recordUnavailableText: { fontSize: 14, color: '#9CA3AF', fontWeight: '500' },
   textInput: {
     backgroundColor: '#F9FAFB', borderRadius: 16, padding: 16, fontSize: 16,
     color: '#1F2937', minHeight: 100, borderWidth: 1.5, borderColor: '#E5E7EB', marginBottom: 14,

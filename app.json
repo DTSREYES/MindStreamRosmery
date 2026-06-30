@@ -26,6 +26,19 @@
         "android.permission.INTERNET"
       ]
     },
+    "plugins": [
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "MindStream necesita el micrófono para transcribir tus pensamientos por voz.",
+          "speechRecognitionPermission": "MindStream usa reconocimiento de voz para convertir tu voz en texto.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      "expo-font"
+    ],
     "extra": {
       "eas": {
         "projectId": "b77430ab-a6e6-47b9-aed1-a6818329097b"

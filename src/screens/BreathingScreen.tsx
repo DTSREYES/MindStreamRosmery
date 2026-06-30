@@ -202,7 +202,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
-    backdropFilter: 'blur(10px)',
   },
   phaseText: {
     fontSize: 18,
